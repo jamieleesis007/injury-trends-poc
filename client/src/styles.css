@@ -357,14 +357,111 @@ input:focus-visible {
   margin-top: 6px;
 }
 
-/* ---------- Timeline ---------- */
+/* ---------- Injury history: season groups ---------- */
+
+.timeline-groups {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-btn:hover { color: var(--gold); }
+
+.dot-sep { color: var(--text-faint); font-size: 11px; }
+
+.season-group {
+  border-top: 1px solid var(--hairline);
+}
+
+.season-group:last-child { border-bottom: 1px solid var(--hairline); }
+
+.season-header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 16px 64px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  background: none;
+  border: none;
+  padding: 12px 4px;
+  color: var(--text);
+  text-align: left;
+}
+
+.season-header:hover .season-label { color: var(--gold); }
+
+.season-chevron {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.season-label {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.season-bar-track {
+  height: 6px;
+  background: var(--panel-raised);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.season-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  min-width: 3px;
+}
+
+.season-stats {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .season-header {
+    grid-template-columns: 16px 1fr;
+    grid-template-areas:
+      "chevron label"
+      "chevron bar"
+      "chevron stats";
+    row-gap: 6px;
+  }
+  .season-chevron { grid-area: chevron; }
+  .season-label { grid-area: label; }
+  .season-bar-track { grid-area: bar; }
+  .season-stats { grid-area: stats; }
+}
 
 .timeline {
   display: flex;
   flex-direction: column;
-  max-height: 560px;
+  max-height: 400px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 4px 4px 8px 30px;
 }
 
 .timeline::-webkit-scrollbar { width: 6px; }
