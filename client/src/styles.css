@@ -91,8 +91,10 @@ input:focus-visible {
 }
 
 .search-row input,
-.refine-row input {
-  flex: 1;
+.refine-row input,
+.refine-row select {
+  flex: 1 1 160px;
+  min-width: 140px;
   background: var(--panel);
   border: 1px solid var(--hairline);
   border-radius: 6px;
@@ -111,6 +113,7 @@ input:focus-visible {
 
 .refine-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 28px;
 }

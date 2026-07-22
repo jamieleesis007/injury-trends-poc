@@ -42,20 +42,24 @@ app.get("/api/players/marco-reus", (req, res) => {
   res.json(analyzePlayer(marcoReus.name, marcoReus.injuries, {
     dateOfBirth: marcoReus.dateOfBirth,
     club: marcoReus.club,
+    position: marcoReus.position,
     sourceUrl: marcoReus.sourceUrl,
     live: false
   }));
 });
 
 /**
- * GET /api/players/search?name=...&nationality=...&club=...
+ * GET /api/players/search?name=...&nationality=...&club=...&position=...&age=...
  * Live path: scrapes the source site. Falls back to a clear error (not fake
  * data) if scraping fails, so the frontend can tell the user what happened.
  *
- * `nationality` and `club` are optional refinement filters — common surnames
- * (e.g. "Joe Gomez") otherwise return many plausible candidates, so these
- * narrow the pool before we pick a "best" match. See searchPlayerProfile()
- * in apiFootball.js for how they're applied.
+ * `nationality`, `club`, `position`, and `age` are optional refinement
+ * filters — common surnames (e.g. "Joe Gomez", "Harvey Elliott") otherwise
+ * return many plausible candidates, so these narrow the pool before we pick
+ * a "best" match. `age` is matched with a tolerance (see AGE_TOLERANCE in
+ * apiFootball.js) rather than exactly, since the source data treats it as
+ * approximate. See searchPlayerProfile() in apiFootball.js for how they're
+ * applied.
  */
 app.get("/api/players/search", async (req, res) => {
   const name = req.query.name;
@@ -63,10 +67,12 @@ app.get("/api/players/search", async (req, res) => {
 
   const filters = {
     nationality: (req.query.nationality || "").trim() || undefined,
-    club: (req.query.club || "").trim() || undefined
+    club: (req.query.club || "").trim() || undefined,
+    position: (req.query.position || "").trim() || undefined,
+    age: (req.query.age || "").trim() || undefined
   };
 
-  const cacheKey = `search:${name.toLowerCase()}:${(filters.nationality || "").toLowerCase()}:${(filters.club || "").toLowerCase()}`;
+  const cacheKey = `search:${name.toLowerCase()}:${(filters.nationality || "").toLowerCase()}:${(filters.club || "").toLowerCase()}:${(filters.position || "").toLowerCase()}:${filters.age || ""}`;
   const cached = getCached(cacheKey);
   if (cached) return res.json(cached);
 
@@ -86,6 +92,8 @@ app.get("/api/players/search", async (req, res) => {
           dateOfBirth: profile.dateOfBirth,
           nationality: profile.nationality,
           club: profile.club,
+          position: profile.position,
+          age: profile.age,
           sourceUrl: "https://www.api-football.com/",
           live: true
         });
@@ -125,7 +133,7 @@ function formatAttempts(attempts) {
   return `Live lookup failed for every source:\n${attempts.map((a) => `- ${a}`).join("\n")}\nTry the demo player, or check network/robots access.`;
 }
 
-function analyzePlayer(name, injuries, { dateOfBirth, nationality, club, sourceUrl, live, nextMatchDate } = {}) {
+function analyzePlayer(name, injuries, { dateOfBirth, nationality, club, position, age, sourceUrl, live, nextMatchDate } = {}) {
   const heatMap = buildHeatMap(injuries);
   const riskScore = computeRiskScore(injuries, heatMap);
   const prediction = predictNextMatchRisk(riskScore, injuries, { dateOfBirth, nextMatchDate });
@@ -135,6 +143,8 @@ function analyzePlayer(name, injuries, { dateOfBirth, nationality, club, sourceU
     dateOfBirth: dateOfBirth || null,
     nationality: nationality || null,
     club: club || null,
+    position: position || null,
+    age: age || null,
     sourceUrl: sourceUrl || null,
     live: Boolean(live),
     injuryCount: injuries.length,

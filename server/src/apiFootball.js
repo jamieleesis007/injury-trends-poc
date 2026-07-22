@@ -113,6 +113,26 @@ function looseMatch(a, b) {
   return na === nb || na.includes(nb) || nb.includes(na);
 }
 
+// Position is missing for a handful of candidates (youth/lower-tier
+// profiles) - treat "unknown" as a pass rather than excluding them, since we
+// can't confirm a mismatch either way.
+function matchPosition(candidatePosition, targetPosition) {
+  if (!candidatePosition) return true;
+  return looseMatch(candidatePosition, targetPosition);
+}
+
+// Age tolerance either side of the requested age - API-Football's `age`
+// field is frequently wrong/placeholder-y for lower-profile players (seen
+// values of 0 or a birth year like 2025 standing in for age), and even
+// correct ages drift by a year depending on when in the season they were
+// computed, so this is intentionally forgiving rather than exact.
+const AGE_TOLERANCE = 5;
+
+function matchAge(candidateAge, targetAge) {
+  if (!candidateAge || candidateAge <= 0) return true; // unknown/placeholder - don't exclude
+  return Math.abs(candidateAge - targetAge) <= AGE_TOLERANCE;
+}
+
 /**
  * Current club is not part of the /players/profiles response, so it needs a
  * separate lookup. Best-effort only: returns null on any failure so a
@@ -156,11 +176,20 @@ const MAX_CLUB_LOOKUPS = 15;
  * a wider net on the surname and ranking candidates locally, with nickname
  * awareness, fixes both.
  *
- * `filters.nationality` and `filters.club` are optional refinements for
- * common names (e.g. "Joe Gomez") that would otherwise return dozens of
- * plausible candidates. Both are applied as soft filters — if a filter
- * eliminates every candidate (e.g. a typo, or data API-Football doesn't
- * have) we fall back to the unfiltered set rather than erroring out.
+ * `filters.nationality`, `filters.position`, `filters.age`, and
+ * `filters.club` are optional refinements for common names (e.g. "Joe
+ * Gomez") that would otherwise return dozens of plausible candidates. All
+ * are applied as soft filters — if a filter eliminates every candidate
+ * (e.g. a typo, or data API-Football doesn't have) we fall back to the
+ * unfiltered set rather than erroring out.
+ *
+ * Nationality, position, and age are filtered for free off the same
+ * /players/profiles response already fetched. Club is the expensive one —
+ * it isn't in that response, so it needs a separate lookup per candidate —
+ * which is why it's applied last, against a shortlist, and why the winning
+ * candidate's club is only looked up when `filters.club` was actually used
+ * (an unconditional lookup here would cost an extra API call on every
+ * search, which burns through API-Football's rate limit fast).
  */
 async function searchPlayerProfile(name, filters = {}) {
   const queryTokens = normalize(name).split(/\s+/).filter(Boolean);
@@ -175,6 +204,17 @@ async function searchPlayerProfile(name, filters = {}) {
   if (filters.nationality) {
     const byNationality = candidates.filter((c) => looseMatch(c.nationality, filters.nationality));
     if (byNationality.length > 0) candidates = byNationality;
+  }
+
+  if (filters.position) {
+    const byPosition = candidates.filter((c) => matchPosition(c.position, filters.position));
+    if (byPosition.length > 0) candidates = byPosition;
+  }
+
+  const targetAge = Number(filters.age);
+  if (filters.age !== undefined && !Number.isNaN(targetAge)) {
+    const byAge = candidates.filter((c) => matchAge(c.age, targetAge));
+    if (byAge.length > 0) candidates = byAge;
   }
 
   candidates = [...candidates].sort(
@@ -192,14 +232,15 @@ async function searchPlayerProfile(name, filters = {}) {
   }
 
   const best = candidates[0];
-  let club = clubById.get(best.id);
-  if (club === undefined) club = await fetchCurrentClub(best.id);
+  const club = clubById.get(best.id) || null;
 
   return {
     id: best.id,
     name: best.name,
     dateOfBirth: best.birth?.date || null,
     nationality: best.nationality || null,
+    position: best.position || null,
+    age: best.age || null,
     club: club?.name || null
   };
 }

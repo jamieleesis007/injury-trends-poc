@@ -5,6 +5,7 @@ import BodyHeatmap from "./components/BodyHeatmap.jsx";
 import NextMatchCard from "./components/NextMatchCard.jsx";
 import InjuryTimeline from "./components/InjuryTimeline.jsx";
 import { NATIONALITIES } from "./constants/nationalities";
+import { POSITIONS } from "./constants/positions";
 
 export default function App() {
   const [player, setPlayer] = useState(null);
@@ -13,6 +14,8 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [nationality, setNationality] = useState("");
   const [club, setClub] = useState("");
+  const [position, setPosition] = useState("");
+  const [age, setAge] = useState("");
   const [showRefine, setShowRefine] = useState(false);
 
   useEffect(() => {
@@ -40,7 +43,9 @@ export default function App() {
     try {
       const data = await searchPlayer(query.trim(), {
         nationality: nationality.trim(),
-        club: club.trim()
+        club: club.trim(),
+        position,
+        age: age.trim()
       });
       setPlayer(data);
     } catch (err) {
@@ -103,6 +108,21 @@ export default function App() {
               value={club}
               onChange={(e) => setClub(e.target.value)}
             />
+            <select value={position} onChange={(e) => setPosition(e.target.value)}>
+              <option value="">Position (optional)</option>
+              {POSITIONS.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              placeholder="Approx. age (optional)"
+              title="Matches within 5 years either side"
+              min="14"
+              max="50"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+            />
           </div>
         )}
       </form>
@@ -127,6 +147,8 @@ export default function App() {
                 )}
                 {player.nationality && <span>{player.nationality}</span>}
                 {player.club && <span>{player.club}</span>}
+                {player.position && <span>{player.position}</span>}
+                {player.age && <span>Age {player.age}</span>}
               </div>
             </div>
             <span className={`source-pill ${player.live ? "live" : ""}`}>

@@ -10,6 +10,8 @@ export async function searchPlayer(name, filters = {}) {
   const params = new URLSearchParams({ name });
   if (filters.nationality) params.set("nationality", filters.nationality);
   if (filters.club) params.set("club", filters.club);
+  if (filters.position) params.set("position", filters.position);
+  if (filters.age) params.set("age", filters.age);
 
   const res = await fetch(`${BASE}/players/search?${params.toString()}`);
   const data = await res.json();
