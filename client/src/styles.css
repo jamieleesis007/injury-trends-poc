@@ -87,10 +87,11 @@ input:focus-visible {
 .search-row {
   display: flex;
   gap: 10px;
-  margin-bottom: 28px;
+  margin-bottom: 10px;
 }
 
-.search-row input {
+.search-row input,
+.refine-row input {
   flex: 1;
   background: var(--panel);
   border: 1px solid var(--hairline);
@@ -101,7 +102,22 @@ input:focus-visible {
   font-size: 14px;
 }
 
-.search-row input::placeholder { color: var(--text-faint); }
+.search-row input::placeholder,
+.refine-row input::placeholder { color: var(--text-faint); }
+
+.refine-toggle {
+  margin-bottom: 12px;
+}
+
+.refine-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 560px) {
+  .refine-row { flex-direction: column; }
+}
 
 .btn {
   background: var(--panel-raised);

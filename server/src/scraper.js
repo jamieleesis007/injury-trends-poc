@@ -28,9 +28,17 @@ async function fetchHtml(url) {
 
 /**
  * Search Soccerway for a player by name, return best-guess profile URL.
+ *
+ * `filters.nationality`/`filters.club` are appended to the search text as a
+ * best-effort relevance nudge for common surnames — Soccerway's search has
+ * no structured filter params we can target, and this scraper always just
+ * takes the first result, so this is the only lever available here. If it
+ * doesn't help for a given query, the API-Football path (which does proper
+ * candidate filtering) is tried first anyway - see index.js.
  */
-async function searchPlayer(name) {
-  const url = `https://www.soccerway.com/search/?q=${encodeURIComponent(name)}`;
+async function searchPlayer(name, filters = {}) {
+  const q = [name, filters.club, filters.nationality].filter(Boolean).join(" ");
+  const url = `https://www.soccerway.com/search/?q=${encodeURIComponent(q)}`;
   const $ = await fetchHtml(url);
   const link = $('a[href*="/player/"]').first().attr("href");
   if (!link) throw new Error(`No player found for "${name}"`);

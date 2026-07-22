@@ -4,12 +4,16 @@ import RiskGauge from "./components/RiskGauge.jsx";
 import BodyHeatmap from "./components/BodyHeatmap.jsx";
 import NextMatchCard from "./components/NextMatchCard.jsx";
 import InjuryTimeline from "./components/InjuryTimeline.jsx";
+import { NATIONALITIES } from "./constants/nationalities";
 
 export default function App() {
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
+  const [nationality, setNationality] = useState("");
+  const [club, setClub] = useState("");
+  const [showRefine, setShowRefine] = useState(false);
 
   useEffect(() => {
     loadDemo();
@@ -34,7 +38,10 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const data = await searchPlayer(query.trim());
+      const data = await searchPlayer(query.trim(), {
+        nationality: nationality.trim(),
+        club: club.trim()
+      });
       setPlayer(data);
     } catch (err) {
       setError(err.message);
@@ -52,19 +59,52 @@ export default function App() {
         <div className="tag">FOOTBALLER RISK ANALYSIS — PROOF OF CONCEPT</div>
       </div>
 
-      <form className="search-row" onSubmit={handleSearch}>
-        <input
-          type="text"
-          placeholder="Search a player by name (live scrape)…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <button className="btn primary" type="submit">
-          Analyze
+      <form onSubmit={handleSearch}>
+        <div className="search-row">
+          <input
+            type="text"
+            placeholder="Search a player by name (live scrape)…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button className="btn primary" type="submit">
+            Analyze
+          </button>
+          <button className="btn" type="button" onClick={loadDemo}>
+            Demo player
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className="link-btn refine-toggle"
+          onClick={() => setShowRefine((v) => !v)}
+        >
+          {showRefine ? "− Hide refinement" : "+ Refine search (common surname? narrow it down)"}
         </button>
-        <button className="btn" type="button" onClick={loadDemo}>
-          Demo player
-        </button>
+
+        {showRefine && (
+          <div className="refine-row">
+            <input
+              type="text"
+              list="nationality-options"
+              placeholder="Nationality (optional)"
+              value={nationality}
+              onChange={(e) => setNationality(e.target.value)}
+            />
+            <datalist id="nationality-options">
+              {NATIONALITIES.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+            <input
+              type="text"
+              placeholder="Current club (optional)"
+              value={club}
+              onChange={(e) => setClub(e.target.value)}
+            />
+          </div>
+        )}
       </form>
 
       {error && (
@@ -85,6 +125,8 @@ export default function App() {
                 {player.dateOfBirth && (
                   <span>Born {new Date(player.dateOfBirth).toLocaleDateString()}</span>
                 )}
+                {player.nationality && <span>{player.nationality}</span>}
+                {player.club && <span>{player.club}</span>}
               </div>
             </div>
             <span className={`source-pill ${player.live ? "live" : ""}`}>

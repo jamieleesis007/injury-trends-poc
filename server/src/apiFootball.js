@@ -103,6 +103,47 @@ async function fetchProfileCandidates(search) {
   return (data?.response || []).map((r) => r.player).filter(Boolean);
 }
 
+// Loose containment match (either way) on normalized strings - used for the
+// optional refinement filters, since we can't assume the user typed the
+// exact string API-Football uses (e.g. "England" vs "english").
+function looseMatch(a, b) {
+  if (!a || !b) return false;
+  const na = normalize(a);
+  const nb = normalize(b);
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
+/**
+ * Current club is not part of the /players/profiles response, so it needs a
+ * separate lookup. Best-effort only: returns null on any failure so a
+ * missing/rate-limited call degrades to "no club info" rather than breaking
+ * the search. The endpoint doesn't flag which team is "current", so we pick
+ * the team associated with the highest season year as a proxy.
+ */
+async function fetchCurrentClub(playerId) {
+  try {
+    const { data } = await client().get("/players/teams", { params: { player: playerId } });
+    const rows = data?.response || [];
+    let latest = null;
+    let latestSeason = -1;
+    for (const row of rows) {
+      const maxSeason = Math.max(0, ...(row.seasons || []));
+      if (maxSeason > latestSeason) {
+        latestSeason = maxSeason;
+        latest = row.team;
+      }
+    }
+    return latest ? { name: latest.name, logo: latest.logo || null } : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Club lookups cost an extra API call per candidate, so when a club filter
+// is supplied we only run it against the top-N name-scored candidates
+// rather than every "Gomez" in the database.
+const MAX_CLUB_LOOKUPS = 15;
+
 /**
  * Search API-Football for a player profile by name, picking the
  * best-matching candidate rather than assuming the first result is correct.
@@ -114,31 +155,52 @@ async function fetchProfileCandidates(search) {
  * can come back completely empty for names it should easily find. Casting
  * a wider net on the surname and ranking candidates locally, with nickname
  * awareness, fixes both.
+ *
+ * `filters.nationality` and `filters.club` are optional refinements for
+ * common names (e.g. "Joe Gomez") that would otherwise return dozens of
+ * plausible candidates. Both are applied as soft filters — if a filter
+ * eliminates every candidate (e.g. a typo, or data API-Football doesn't
+ * have) we fall back to the unfiltered set rather than erroring out.
  */
-async function searchPlayerProfile(name) {
+async function searchPlayerProfile(name, filters = {}) {
   const queryTokens = normalize(name).split(/\s+/).filter(Boolean);
   const surname = queryTokens[queryTokens.length - 1];
   if (!surname) throw new Error(`No player found on API-Football for "${name}"`);
 
-  const candidates = await fetchProfileCandidates(surname);
+  let candidates = await fetchProfileCandidates(surname);
   if (candidates.length === 0) {
     throw new Error(`No player found on API-Football for "${name}"`);
   }
 
-  let best = candidates[0];
-  let bestScore = -1;
-  for (const candidate of candidates) {
-    const score = scoreCandidate(queryTokens, candidate);
-    if (score > bestScore) {
-      bestScore = score;
-      best = candidate;
-    }
+  if (filters.nationality) {
+    const byNationality = candidates.filter((c) => looseMatch(c.nationality, filters.nationality));
+    if (byNationality.length > 0) candidates = byNationality;
   }
+
+  candidates = [...candidates].sort(
+    (a, b) => scoreCandidate(queryTokens, b) - scoreCandidate(queryTokens, a)
+  );
+
+  let clubById = new Map();
+  if (filters.club) {
+    const shortlist = candidates.slice(0, MAX_CLUB_LOOKUPS);
+    const clubs = await Promise.all(shortlist.map((c) => fetchCurrentClub(c.id)));
+    shortlist.forEach((c, i) => clubById.set(c.id, clubs[i]));
+
+    const byClub = shortlist.filter((c) => looseMatch(clubById.get(c.id)?.name, filters.club));
+    if (byClub.length > 0) candidates = byClub;
+  }
+
+  const best = candidates[0];
+  let club = clubById.get(best.id);
+  if (club === undefined) club = await fetchCurrentClub(best.id);
 
   return {
     id: best.id,
     name: best.name,
-    dateOfBirth: best.birth?.date || null
+    dateOfBirth: best.birth?.date || null,
+    nationality: best.nationality || null,
+    club: club?.name || null
   };
 }
 
