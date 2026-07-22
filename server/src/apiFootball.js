@@ -30,6 +30,10 @@ function client() {
  */
 async function searchPlayerProfile(name) {
   const { data } = await client().get("/players/profiles", { params: { search: name } });
+  // TEMPORARY DEBUG LOGGING — remove once the response shape is confirmed
+  // against a real account. Prints to the server terminal only; never sent
+  // to the browser or the API key itself.
+  console.log("[API-Football] /players/profiles raw response:", JSON.stringify(data, null, 2));
   const match = data?.response?.[0]?.player;
   if (!match) throw new Error(`No player found on API-Football for "${name}"`);
   return {
@@ -45,6 +49,8 @@ async function searchPlayerProfile(name) {
  */
 async function fetchInjuryHistory(playerId) {
   const { data } = await client().get("/sidelined", { params: { player: playerId } });
+  // TEMPORARY DEBUG LOGGING — see note above.
+  console.log(`[API-Football] /sidelined raw response for player ${playerId}:`, JSON.stringify(data, null, 2));
   const rows = data?.response || [];
   return rows
     .filter((row) => row.start)
