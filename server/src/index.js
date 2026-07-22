@@ -1,7 +1,10 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 
 const { searchPlayer, scrapeInjuryHistory, scrapeNextFixture } = require("./scraper");
+const { searchPlayerProfile, fetchInjuryHistory } = require("./apiFootball");
 const { buildHeatMap } = require("./bodyMap");
 const { computeRiskScore, predictNextMatchRisk } = require("./riskEngine");
 const { marcoReus } = require("./seedData");
@@ -55,6 +58,27 @@ app.get("/api/players/search", async (req, res) => {
   const cacheKey = `search:${name.toLowerCase()}`;
   const cached = getCached(cacheKey);
   if (cached) return res.json(cached);
+
+  // Preferred path: API-Football (licensed, structured data). Falls through
+  // to the Soccerway scraper below if no key is configured, the player
+  // isn't found, or the request fails for any reason.
+  if (process.env.API_FOOTBALL_KEY) {
+    try {
+      const profile = await searchPlayerProfile(name);
+      const injuries = await fetchInjuryHistory(profile.id);
+      if (injuries.length > 0) {
+        const result = analyzePlayer(profile.name, injuries, {
+          dateOfBirth: profile.dateOfBirth,
+          sourceUrl: "https://www.api-football.com/",
+          live: true
+        });
+        setCached(cacheKey, result);
+        return res.json(result);
+      }
+    } catch (err) {
+      console.warn(`API-Football lookup failed for "${name}": ${err.message}. Falling back to scraper.`);
+    }
+  }
 
   try {
     const profileUrl = await searchPlayer(name);
