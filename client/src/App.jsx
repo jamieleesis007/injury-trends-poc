@@ -4,6 +4,7 @@ import RiskGauge from "./components/RiskGauge.jsx";
 import BodyHeatmap from "./components/BodyHeatmap.jsx";
 import NextMatchCard from "./components/NextMatchCard.jsx";
 import InjuryTimeline from "./components/InjuryTimeline.jsx";
+import PlayerProfile from "./components/PlayerProfile.jsx";
 import { NATIONALITIES } from "./constants/nationalities";
 import { POSITIONS } from "./constants/positions";
 
@@ -142,19 +143,14 @@ export default function App() {
               <h1>{player.name}</h1>
               <div className="player-meta">
                 <span>{player.injuryCount} recorded injuries</span>
-                {player.dateOfBirth && (
-                  <span>Born {new Date(player.dateOfBirth).toLocaleDateString()}</span>
-                )}
-                {player.nationality && <span>{player.nationality}</span>}
-                {player.club && <span>{player.club}</span>}
-                {player.position && <span>{player.position}</span>}
-                {player.age && <span>Age {player.age}</span>}
               </div>
             </div>
             <span className={`source-pill ${player.live ? "live" : ""}`}>
               {player.live ? "● LIVE SOURCE" : "○ CACHED DEMO DATA"}
             </span>
           </div>
+
+          <PlayerProfile player={player} />
 
           <div className="grid">
             <div className="panel">

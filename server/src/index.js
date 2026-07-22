@@ -94,6 +94,8 @@ app.get("/api/players/search", async (req, res) => {
           club: profile.club,
           position: profile.position,
           age: profile.age,
+          number: profile.number,
+          photo: profile.photo,
           sourceUrl: "https://www.api-football.com/",
           live: true
         });
@@ -133,7 +135,7 @@ function formatAttempts(attempts) {
   return `Live lookup failed for every source:\n${attempts.map((a) => `- ${a}`).join("\n")}\nTry the demo player, or check network/robots access.`;
 }
 
-function analyzePlayer(name, injuries, { dateOfBirth, nationality, club, position, age, sourceUrl, live, nextMatchDate } = {}) {
+function analyzePlayer(name, injuries, { dateOfBirth, nationality, club, position, age, number, photo, sourceUrl, live, nextMatchDate } = {}) {
   const heatMap = buildHeatMap(injuries);
   const riskScore = computeRiskScore(injuries, heatMap);
   const prediction = predictNextMatchRisk(riskScore, injuries, { dateOfBirth, nextMatchDate });
@@ -145,6 +147,8 @@ function analyzePlayer(name, injuries, { dateOfBirth, nationality, club, positio
     club: club || null,
     position: position || null,
     age: age || null,
+    number: number ?? null,
+    photo: photo || null,
     sourceUrl: sourceUrl || null,
     live: Boolean(live),
     injuryCount: injuries.length,

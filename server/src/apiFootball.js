@@ -241,7 +241,13 @@ async function searchPlayerProfile(name, filters = {}) {
     nationality: best.nationality || null,
     position: best.position || null,
     age: best.age || null,
-    club: club?.name || null
+    number: best.number ?? null,
+    club: club?.name || null,
+    // Best-effort only - API-Football generates this URL from the player id
+    // regardless of whether a real photo was ever uploaded for them, so it
+    // 404s for a lot of lower-profile players. Treat as optional; the UI
+    // must fall back gracefully rather than assume it always loads.
+    photo: best.photo || null
   };
 }
 

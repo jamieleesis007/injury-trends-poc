@@ -197,6 +197,63 @@ input:focus-visible {
 
 .source-pill.live { border-color: var(--green); color: var(--green); }
 
+/* ---------- Player profile ---------- */
+
+.profile-panel {
+  margin-bottom: 20px;
+}
+
+.profile-body {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.profile-photo {
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--panel-raised);
+  border: 1px solid var(--hairline);
+  flex-shrink: 0;
+}
+
+.profile-photo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.profile-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 24px;
+  flex: 1;
+  margin: 0;
+  min-width: 200px;
+}
+
+.profile-detail-row dt {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+}
+
+.profile-detail-row dd {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
 /* ---------- Grid layout ---------- */
 
 .grid {
