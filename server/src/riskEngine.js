@@ -1,37 +1,90 @@
 const { daysBetween } = require("./bodyMap");
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const MS_PER_YEAR = MS_PER_DAY * 365;
+
+// Used to estimate career length from date of birth (see estimateCareerDays)
+// - not meant to be precise, just a reasonable floor for "years as a
+// professional" so a long, mostly-healthy career doesn't get judged on the
+// same footing as a short one.
+const ESTIMATED_DEBUT_AGE = 18;
+
+// Injury `type` is free text from the source data ("Thigh Injury", "Knock",
+// "ACL Rupture", ...). This buckets it into a severity tier so that, e.g., a
+// torn ACL counts for more than a generic knock of the same duration - two
+// players who each lost 30 days can represent very different underlying
+// risk depending on what actually happened.
+const MAJOR_INJURY_KEYWORDS = ["acl", "cruciate", "achilles", "rupture", "fracture", "break", "surgery", "dislocation", "tendon", "torn"];
+const MINOR_INJURY_KEYWORDS = ["knock", "illness", "flu", "virus", "cold", "covid", "sickness", "suspension", "rest"];
+const SEVERITY_MULTIPLIER = { major: 1.6, moderate: 1, minor: 0.35 };
+
+function classifySeverity(typeText) {
+  const t = (typeText || "").toLowerCase();
+  if (MAJOR_INJURY_KEYWORDS.some((k) => t.includes(k))) return "major";
+  if (MINOR_INJURY_KEYWORDS.some((k) => t.includes(k))) return "minor";
+  return "moderate";
+}
+
+// A career-length denominator, not just "time since their first recorded
+// injury" - that anchor understates career length for exactly the players
+// this fix is for (a long, mostly injury-free career whose earliest injury
+// record might be recent), which would unfairly inflate their risk. When
+// date of birth is known, estimate seasons played from age instead; only
+// fall back to the injury-anchored estimate when it isn't available.
+function estimateCareerDays(injuries, dateOfBirth, now) {
+  if (dateOfBirth) {
+    const ageYears = (now - new Date(dateOfBirth)) / MS_PER_YEAR;
+    if (ageYears > ESTIMATED_DEBUT_AGE) {
+      return (ageYears - ESTIMATED_DEBUT_AGE) * 365;
+    }
+  }
+  const sorted = [...injuries].sort((a, b) => new Date(a.from) - new Date(b.from));
+  const firstDate = new Date(sorted[0].from);
+  return Math.max(365, (now - firstDate) / MS_PER_DAY);
+}
+
 /**
  * Compute a 1-10 injury-proneness score from a player's injury history.
  *
  * Heuristic, not a validated clinical/statistical model — this is a POC.
  * Factors combined (each 0-1, then weighted):
- *  - frequency: injuries per year of the player's tracked career window
- *  - severity: average days out per injury (capped)
+ *  - frequency: raw injury count per year - how often they pick up knocks,
+ *    regardless of how long each one kept them out
+ *  - burden: severity-weighted days out as a *share of career length*. This
+ *    is the key factor for telling apart "lots of games, few real injuries"
+ *    from "short career, badly hit" - the same total days out matters far
+ *    less spread over 15 seasons than over 2. See estimateCareerDays() and
+ *    classifySeverity() above.
  *  - recency: how recently the most recent injury occurred
  *  - recurrence: how concentrated injuries are in a small number of regions
  *    (repeated hits to the same region signal a chronic/overuse pattern)
  */
-function computeRiskScore(injuries, heatMap, { now = new Date() } = {}) {
+function computeRiskScore(injuries, heatMap, { now = new Date(), dateOfBirth } = {}) {
   if (injuries.length === 0) {
-    return { score: 1, breakdown: { frequency: 0, severity: 0, recency: 0, recurrence: 0 } };
+    return { score: 1, breakdown: { frequency: 0, burden: 0, recency: 0, recurrence: 0 } };
   }
 
   const sorted = [...injuries].sort((a, b) => new Date(a.from) - new Date(b.from));
-  const firstDate = new Date(sorted[0].from);
-  const careerYears = Math.max(1, (now - firstDate) / (1000 * 60 * 60 * 24 * 365));
+  const careerDays = estimateCareerDays(injuries, dateOfBirth, now);
+  const careerYears = careerDays / 365;
 
   // --- Frequency: injuries per year, normalized against a busy-but-plausible ceiling of 6/yr
   const perYear = injuries.length / careerYears;
   const frequency = Math.min(1, perYear / 6);
 
-  // --- Severity: average days out per injury, normalized against a 60-day ceiling
-  const totalDays = injuries.reduce((sum, inj) => sum + daysBetween(inj.from, inj.until), 0);
-  const avgDays = totalDays / injuries.length;
-  const severity = Math.min(1, avgDays / 60);
+  // --- Burden: severity-weighted days out, as a share of estimated career
+  // length so far. Normalized against a 15%-of-career ceiling (losing more
+  // than that to injury is a strong signal on its own).
+  const weightedDaysOut = injuries.reduce((sum, inj) => {
+    const days = daysBetween(inj.from, inj.until);
+    return sum + days * SEVERITY_MULTIPLIER[classifySeverity(inj.type)];
+  }, 0);
+  const burdenShare = weightedDaysOut / careerDays;
+  const burden = Math.min(1, burdenShare / 0.15);
 
   // --- Recency: days since most recent injury onset, normalized (0 = >2yrs ago, 1 = today)
   const mostRecent = sorted[sorted.length - 1];
-  const daysSinceLast = Math.max(0, (now - new Date(mostRecent.from)) / (1000 * 60 * 60 * 24));
+  const daysSinceLast = Math.max(0, (now - new Date(mostRecent.from)) / MS_PER_DAY);
   const recency = Math.max(0, 1 - daysSinceLast / 730);
 
   // --- Recurrence: concentration of injuries in top regions (Herfindahl-style)
@@ -44,10 +97,10 @@ function computeRiskScore(injuries, heatMap, { now = new Date() } = {}) {
     recurrence = herfindahl;
   }
 
-  const weights = { frequency: 0.35, severity: 0.2, recency: 0.2, recurrence: 0.25 };
+  const weights = { frequency: 0.15, burden: 0.4, recency: 0.2, recurrence: 0.25 };
   const composite =
     frequency * weights.frequency +
-    severity * weights.severity +
+    burden * weights.burden +
     recency * weights.recency +
     recurrence * weights.recurrence;
 
@@ -57,7 +110,7 @@ function computeRiskScore(injuries, heatMap, { now = new Date() } = {}) {
     score: Math.min(10, Math.max(1, score)),
     breakdown: {
       frequency: Number(frequency.toFixed(2)),
-      severity: Number(severity.toFixed(2)),
+      burden: Number(burden.toFixed(2)),
       recency: Number(recency.toFixed(2)),
       recurrence: Number(recurrence.toFixed(2))
     }

@@ -137,7 +137,7 @@ function formatAttempts(attempts) {
 
 function analyzePlayer(name, injuries, { dateOfBirth, nationality, club, position, age, number, photo, sourceUrl, live, nextMatchDate } = {}) {
   const heatMap = buildHeatMap(injuries);
-  const riskScore = computeRiskScore(injuries, heatMap);
+  const riskScore = computeRiskScore(injuries, heatMap, { dateOfBirth });
   const prediction = predictNextMatchRisk(riskScore, injuries, { dateOfBirth, nextMatchDate });
 
   return {

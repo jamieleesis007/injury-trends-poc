@@ -2,7 +2,7 @@ import React from "react";
 
 const FACTOR_LABELS = {
   frequency: "Frequency",
-  severity: "Severity",
+  burden: "Career burden",
   recency: "Recency",
   recurrence: "Recurrence"
 };
