@@ -73,14 +73,19 @@ function computeRiskScore(injuries, heatMap, { now = new Date(), dateOfBirth } =
   const frequency = Math.min(1, perYear / 6);
 
   // --- Burden: severity-weighted days out, as a share of estimated career
-  // length so far. Normalized against a 15%-of-career ceiling (losing more
-  // than that to injury is a strong signal on its own).
+  // length so far, scaled against a 15%-of-career reference point (losing
+  // more than that to injury is a strong signal on its own). Uses a smooth
+  // saturating curve rather than a hard cap: real players can blow well past
+  // this reference (a 30%+ share isn't rare for a genuinely injury-hit
+  // career), and a hard `Math.min(1, share/ceiling)` would flatten all of
+  // them to the same maxed-out 1.0, making them indistinguishable from each
+  // other even though their actual burden differs a lot.
   const weightedDaysOut = injuries.reduce((sum, inj) => {
     const days = daysBetween(inj.from, inj.until);
     return sum + days * SEVERITY_MULTIPLIER[classifySeverity(inj.type)];
   }, 0);
   const burdenShare = weightedDaysOut / careerDays;
-  const burden = Math.min(1, burdenShare / 0.15);
+  const burden = 1 - Math.exp(-burdenShare / 0.15);
 
   // --- Recency: days since most recent injury onset, normalized (0 = >2yrs ago, 1 = today)
   const mostRecent = sorted[sorted.length - 1];
@@ -104,7 +109,12 @@ function computeRiskScore(injuries, heatMap, { now = new Date(), dateOfBirth } =
     recency * weights.recency +
     recurrence * weights.recurrence;
 
-  const score = Math.round(1 + composite * 9); // map 0-1 -> 1-10
+  // Keep one decimal place rather than rounding to a whole number - two
+  // players can have meaningfully different underlying risk (e.g. 5.8 vs
+  // 6.3) that a whole-number score would hide by rounding both to "6",
+  // making them look identical when they aren't. That lost precision also
+  // used to feed directly into predictNextMatchRisk's base rate below.
+  const score = Number((1 + composite * 9).toFixed(1)); // map 0-1 -> 1-10
 
   return {
     score: Math.min(10, Math.max(1, score)),
@@ -125,10 +135,17 @@ function computeRiskScore(injuries, heatMap, { now = new Date(), dateOfBirth } =
  *  - "return window" effect: elevated re-injury risk in the ~30 days after
  *    coming back from a layoff (well-documented pattern in sports medicine)
  *  - days until next match (short turnaround / congestion raises risk slightly)
- *  - age adjustment (very small; injury risk trends up with age in the data itself,
- *    which frequency/recency already partly capture, so this is a light nudge only)
+ *
+ * There's deliberately no separate age adjustment here: age is already
+ * reflected fairly in the risk score's career-length denominator (see
+ * estimateCareerDays above) - a long, mostly healthy career already scores
+ * low there. A flat "older = add risk" bonus on top of that would
+ * double-count age and isn't justified by anything about the specific
+ * player; it was previously the reason a fit veteran with a lower
+ * underlying risk score could still show a higher predicted percentage
+ * than a younger player with a worse injury record.
  */
-function predictNextMatchRisk(riskScore, injuries, { now = new Date(), nextMatchDate, dateOfBirth } = {}) {
+function predictNextMatchRisk(riskScore, injuries, { now = new Date(), nextMatchDate } = {}) {
   const sorted = [...injuries].sort((a, b) => new Date(a.from) - new Date(b.from));
   const mostRecent = sorted[sorted.length - 1];
 
@@ -157,16 +174,6 @@ function predictNextMatchRisk(riskScore, injuries, { now = new Date(), nextMatch
     }
   }
 
-  // Light age nudge
-  let ageNote = null;
-  if (dateOfBirth) {
-    const age = (now - new Date(dateOfBirth)) / (1000 * 60 * 60 * 24 * 365);
-    if (age >= 32) {
-      base += 0.05;
-      ageNote = `Player age ${Math.floor(age)} — injury incidence typically rises in the 30s`;
-    }
-  }
-
   const probability = Math.min(0.92, Math.max(0.03, base));
 
   let tier = "Low";
@@ -176,7 +183,7 @@ function predictNextMatchRisk(riskScore, injuries, { now = new Date(), nextMatch
   return {
     probabilityPct: Math.round(probability * 100),
     tier,
-    notes: [returnWindowNote, congestionNote, ageNote].filter(Boolean)
+    notes: [returnWindowNote, congestionNote].filter(Boolean)
   };
 }
 
