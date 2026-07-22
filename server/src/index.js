@@ -61,7 +61,11 @@ app.get("/api/players/search", async (req, res) => {
 
   // Preferred path: API-Football (licensed, structured data). Falls through
   // to the Soccerway scraper below if no key is configured, the player
-  // isn't found, or the request fails for any reason.
+  // isn't found, or the request fails for any reason. `attempts` records
+  // why each source was skipped/failed so a total failure is diagnosable
+  // from the API response alone, not just server-side logs.
+  const attempts = [];
+
   if (process.env.API_FOOTBALL_KEY) {
     try {
       const profile = await searchPlayerProfile(name);
@@ -75,9 +79,12 @@ app.get("/api/players/search", async (req, res) => {
         setCached(cacheKey, result);
         return res.json(result);
       }
+      attempts.push("API-Football: player found but no sidelined/injury records returned");
     } catch (err) {
-      console.warn(`API-Football lookup failed for "${name}": ${err.message}. Falling back to scraper.`);
+      attempts.push(`API-Football: ${err.message}`);
     }
+  } else {
+    attempts.push("API-Football: no API_FOOTBALL_KEY configured");
   }
 
   try {
@@ -85,10 +92,9 @@ app.get("/api/players/search", async (req, res) => {
     const { name: scrapedName, injuries } = await scrapeInjuryHistory(profileUrl);
 
     if (injuries.length === 0) {
-      return res.status(502).json({
-        error: "Player page found but no injuries could be parsed. The site layout may have changed — see server/src/scraper.js for selectors to fix.",
-        profileUrl
-      });
+      attempts.push("Soccerway: player page found but no injuries could be parsed (site layout may have changed — see server/src/scraper.js)");
+      console.warn(`Live lookup failed for "${name}":\n${attempts.map((a) => `  - ${a}`).join("\n")}`);
+      return res.status(502).json({ error: formatAttempts(attempts), profileUrl });
     }
 
     const nextMatchDate = await scrapeNextFixture(profileUrl);
@@ -96,11 +102,15 @@ app.get("/api/players/search", async (req, res) => {
     setCached(cacheKey, result);
     res.json(result);
   } catch (err) {
-    res.status(502).json({
-      error: `Live lookup failed: ${err.message}. Try the demo player, or check network/robots access.`,
-    });
+    attempts.push(`Soccerway: ${err.message}`);
+    console.warn(`Live lookup failed for "${name}":\n${attempts.map((a) => `  - ${a}`).join("\n")}`);
+    res.status(502).json({ error: formatAttempts(attempts) });
   }
 });
+
+function formatAttempts(attempts) {
+  return `Live lookup failed for every source:\n${attempts.map((a) => `- ${a}`).join("\n")}\nTry the demo player, or check network/robots access.`;
+}
 
 function analyzePlayer(name, injuries, { dateOfBirth, sourceUrl, live, nextMatchDate } = {}) {
   const heatMap = buildHeatMap(injuries);
